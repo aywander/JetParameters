@@ -459,9 +459,9 @@ class JetParams():
         if pratio is None: pratio = self.pratio
         if input_param is None: input_param = self.input_param
         vel = self.eqn_vel(lorentz)
-        vsnd_RHD = self.eqn_vsnd_rhd(power, lorentz, chi, rjet, gamma_rhd,
+        vsnd_rhd = self.eqn_vsnd_rhd(power, lorentz, chi, rjet, gamma_rhd,
                                      pratio, dens_ambient, temp_ambient, input_param)
-        return lorentz * vel / vsnd_RHD
+        return lorentz * vel / vsnd_rhd
 
     def eqn_mach_hd_kf(self, power=None, lorentz=None, chi=None, rjet=None, gamma_rhd=None,
                        pratio=None, dens_ambient=None, temp_ambient=None, input_param=None):
@@ -478,9 +478,9 @@ class JetParams():
         if temp_ambient is None: temp_ambient = self.temp_ambient
         if pratio is None: pratio = self.pratio
         if input_param is None: input_param = self.input_param
-        mach_RHD = self.eqn_mach_rhd_kf(power, lorentz, chi, rjet, gamma_rhd,
+        mach_rhd = self.eqn_mach_rhd_kf(power, lorentz, chi, rjet, gamma_rhd,
                                         pratio, dens_ambient, temp_ambient, input_param)
-        return mach_RHD * np.sqrt(2 * (lorentz / (lorentz + 1.)
+        return mach_rhd * np.sqrt(2 * (lorentz / (lorentz + 1.)
                                        + gamma_rhd / (gamma_rhd - 1.) / (4 * chi))
                                   / (1. + gamma_rhd * (2. - gamma_rhd) / (gamma_rhd - 1.) / (4 * chi)))
 
@@ -583,8 +583,8 @@ class JetParams():
         if rjet is None: rjet = self.rjet
         if gamma_rhd is None: gamma_rhd = self.gamma_rhd
         area = rjet ** 2 * np.pi
-        power_HD = self.eqn_power_hd(vel, rjet, dens, pres, gamma_rhd)
-        return power_HD / area
+        power_hd = self.eqn_power_hd(vel, rjet, dens, pres, gamma_rhd)
+        return power_hd / area
 
     def eqn_pratio(self, power=None, lorentz=None, chi=None, rjet=None, gamma_rhd=None,
                    pratio=None, dens_ambient=None, temp_ambient=None, input_param=None):
