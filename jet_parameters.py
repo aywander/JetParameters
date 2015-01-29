@@ -33,20 +33,10 @@ class JetParams():
     are required, PhysNorm classes should be used.
     """
 
-    def __init__(self,
-                 power=1.e45,
-                 chi=1.,
-                 pratio=1.,
-                 lorentz=5,
-                 rjet=0.01,
-                 gamma_rhd=1.6666666666,
-                 dens_ambient=1.0,
-                 temp_ambient=1.e7,
-                 gamma_hd=1.6666666666,
-                 input_param='chi',
+    def __init__(self, power=1.e45, chi=1., pratio=1., lorentz=5, rjet=0.01, alpha=0.0, gamma_rhd=1.6666666666,
+                 gamma_hd=1.6666666666, dens_ambient=1.0, temp_ambient=1.e7, input_param='chi',
                  norm_code=norm.PhysNorm(x=pc.kpc, v=pc.c, dens=0.6165 * pc.amu,
-                                        temp=pc.c ** 2 * pc.amu / pc.kboltz, curr=1)
-    ):
+                                         temp=pc.c ** 2 * pc.amu / pc.kboltz, curr=1)):
         """
         By default, internally, everything is then converted into and handled in units of 
 
@@ -63,6 +53,7 @@ class JetParams():
         :param pratio:           Jet to ambient medium pressure ratio
         :param lorentz:          Jet lorentz factor
         :param rjet:             Jet radius (kpc)
+        :param alpha:            Jet half opening angle (degrees)
         :param gamma_rhd:        Adiabiatic index relativistic
         :param dens_ambient:     Reference temperature of background ISM (K).
         :param temp_ambient:     Reference density of background ISM (amu*mu).
@@ -77,6 +68,7 @@ class JetParams():
         self.pratio = pratio
         self.lorentz = lorentz
         self.rjet = rjet
+        self.alpha= alpha
         self.gamma_rhd = gamma_rhd
         self.dens_ambient = dens_ambient
         self.temp_ambient = temp_ambient
@@ -149,6 +141,7 @@ class JetParams():
         # Change all input parameters into code units here first.
         self.power = self.power / getattr(self.norm_code, self.defs['power'][0])
         self.temp_ambient = self.temp_ambient / getattr(self.norm_code, self.defs['temp_ambient'][0])
+        self.alpha = np.deg2rad(alpha)
 
         # Create and keep a composition object for jet
         self.jc = CompositionJet()
@@ -307,12 +300,21 @@ class JetParams():
         if lorentz is None: lorentz = self.lorentz
         return (pc.c / self.norm_code.v) * np.sqrt(1. - 1. / lorentz ** 2)
 
-    def eqn_pres(self, power=None, lorentz=None, chi=None, rjet=None, gamma_rhd=None,
-                 pratio=None, dens_ambient=None, temp_ambient=None, input_param=None):
+    def eqn_area(self, rjet=None, alpha=None):
+        if rjet is None: rjet = self.rjet
+        if alpha is None: alpha = self.alpha
+        if alpha > 1.e-30:
+            return 2. * np.pi * (1. - np.cos(alpha)) * pow(rjet / np.sin(alpha), 2)
+        else:
+            return np.pi * rjet * rjet
+
+    def eqn_pres(self, power=None, lorentz=None, chi=None, rjet=None, alpha=None, gamma_rhd=None, pratio=None,
+                 dens_ambient=None, temp_ambient=None, input_param=None):
         if power is None: power = self.power
         if lorentz is None: lorentz = self.lorentz
         if chi is None: chi = self.chi
         if rjet is None: rjet = self.rjet
+        if alpha is None: alpha = self.alpha
         if gamma_rhd is None: gamma_rhd = self.gamma_rhd
         if dens_ambient is None: dens_ambient = self.dens_ambient
         if temp_ambient is None: temp_ambient = self.temp_ambient
@@ -323,19 +325,20 @@ class JetParams():
             return pratio * pres_ambient
         elif input_param == 'chi':
             beta = self.eqn_beta(lorentz)
-            area = rjet ** 2 * np.pi
+            area = self.eqn_area(rjet=rjet, alpha=alpha)
             return ((gamma_rhd - 1.) / gamma_rhd * power /
                     ((pc.c / self.norm_code.v) * area * lorentz ** 2 * beta
                      * (1. + (lorentz - 1.) / lorentz * chi)))
         else:
             raise ValueError('Unknown value for input_param, ' + input_param)
 
-    def eqn_chi(self, power=None, lorentz=None, chi=None, rjet=None, gamma_rhd=None,
-                pratio=None, dens_ambient=None, temp_ambient=None, input_param=None):
+    def eqn_chi(self, power=None, lorentz=None, chi=None, rjet=None, alpha=None, gamma_rhd=None, pratio=None,
+                dens_ambient=None, temp_ambient=None, input_param=None):
         if power is None: power = self.power
         if lorentz is None: lorentz = self.lorentz
         if chi is None: chi = self.chi
         if rjet is None: rjet = self.rjet
+        if alpha is None: alpha = self.alpha
         if gamma_rhd is None: gamma_rhd = self.gamma_rhd
         if dens_ambient is None: dens_ambient = self.dens_ambient
         if temp_ambient is None: temp_ambient = self.temp_ambient
@@ -343,9 +346,9 @@ class JetParams():
         if input_param is None: input_param = self.input_param
         if input_param == 'pratio':
             beta = self.eqn_beta(lorentz)
-            area = rjet ** 2 * np.pi
-            pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd,
-                                 pratio, dens_ambient, temp_ambient, input_param)
+            area = self.eqn_area(rjet=rjet, alpha=alpha)
+            pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd=gamma_rhd, pratio=pratio,
+                                 dens_ambient=dens_ambient, temp_ambient=temp_ambient, input_param=input_param)
             return lorentz / (lorentz - 1.) * ((gamma_rhd - 1.) / gamma_rhd * power / (
                 (pc.c / self.norm_code.v) * pres * area * lorentz ** 2 * beta) - 1.)
         elif input_param == 'chi':
@@ -353,10 +356,11 @@ class JetParams():
         else:
             raise ValueError('Unknown value for input_param, ' + input_param)
 
-    def eqn_eflx(self, power=None, rjet=None):
+    def eqn_eflx(self, power=None, rjet=None, alpha=None):
         if power is None: power = self.power
         if rjet is None: rjet = self.rjet
-        return power / (rjet ** 2 * np.pi)
+        area = self.eqn_area(rjet, alpha)
+        return power / area
 
     def eqn_dens(self, power=None, lorentz=None, chi=None, rjet=None, gamma_rhd=None,
                  pratio=None, dens_ambient=None, temp_ambient=None, input_param=None):
@@ -372,8 +376,8 @@ class JetParams():
         if temp_ambient is None: temp_ambient = self.temp_ambient
         if pratio is None: pratio = self.pratio
         if input_param is None: input_param = self.input_param
-        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd,
-                             pratio, dens_ambient, temp_ambient, input_param)
+        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd=gamma_rhd, pratio=pratio, dens_ambient=dens_ambient,
+                             temp_ambient=temp_ambient, input_param=input_param)
         return chi * gamma_rhd / (gamma_rhd - 1) * pres / (pc.c / self.norm_code.v) ** 2
 
     def eqn_temp(self, power=None, lorentz=None, chi=None, rjet=None,
@@ -389,8 +393,8 @@ class JetParams():
         if temp_ambient is None: temp_ambient = self.temp_ambient
         if pratio is None: pratio = self.pratio
         if input_param is None: input_param = self.input_param
-        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd, pratio,
-                             dens_ambient, temp_ambient, input_param)
+        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd=gamma_rhd, pratio=pratio, dens_ambient=dens_ambient,
+                             temp_ambient=temp_ambient, input_param=input_param)
         dens = self.eqn_dens(power, lorentz, chi, rjet, gamma_rhd, pratio,
                              dens_ambient, temp_ambient, input_param)
         return self.eosj.temp_from_dens_pres(dens, pres, muj)
@@ -412,8 +416,8 @@ class JetParams():
         if temp_ambient is None: temp_ambient = self.temp_ambient
         if pratio is None: pratio = self.pratio
         if input_param is None: input_param = self.input_param
-        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd, pratio,
-                             dens_ambient, temp_ambient, input_param)
+        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd=gamma_rhd, pratio=pratio, dens_ambient=dens_ambient,
+                             temp_ambient=temp_ambient, input_param=input_param)
         dens = self.eqn_dens(power, lorentz, chi, rjet, gamma_rhd, pratio,
                              dens_ambient, temp_ambient, input_param)
         vsnd = self.eqn_vsnd(pres, dens, gamma_rhd)
@@ -501,8 +505,8 @@ class JetParams():
         if temp_ambient is None: temp_ambient = self.temp_ambient
         if pratio is None: pratio = self.pratio
         if input_param is None: input_param = self.input_param
-        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd, pratio,
-                             dens_ambient, temp_ambient, input_param)
+        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd=gamma_rhd, pratio=pratio, dens_ambient=dens_ambient,
+                             temp_ambient=temp_ambient, input_param=input_param)
         return 2 * gamma_rhd / (gamma_rhd - 1.) * pres / (pc.c / self.norm_code.v) ** 2 \
                * lorentz ** 2 * (1. + chi * lorentz / (lorentz + 1.))
 
@@ -518,12 +522,13 @@ class JetParams():
         if rjet is None: rjet = self.rjet
         if gamma_rhd is None: gamma_rhd = self.gamma_rhd
         dens = self.eqn_dens(power, lorentz, chi, rjet, gamma_rhd)
-        return 2 * dens * lorentz ** 2 * (lorentz / (lorentz + 1.) \
+        return 2 * dens * lorentz ** 2 * (lorentz / (lorentz + 1.)
                                           + gamma_rhd / (gamma_rhd - 1.) / (4 * chi))
 
-    def eqn_power_rhd(self, lorentz=None, chi=None, rjet=None, pres=None, gamma_rhd=None):
+    def eqn_power_rhd(self, lorentz=None, chi=None, rjet=None, alpha=None, pres=None, gamma_rhd=None):
         """
         Jet power as calculated from relativistic parameters
+        :param alpha:
         """
         if pres is None: pres = self.pres
         if lorentz is None: lorentz = self.lorentz
@@ -531,21 +536,22 @@ class JetParams():
         if rjet is None: rjet = self.rjet
         if gamma_rhd is None: gamma_rhd = self.gamma_rhd
         beta = self.eqn_beta(lorentz)
-        area = rjet ** 2 * np.pi
+        area = self.eqn_area(rjet, alpha)
         return gamma_rhd / (gamma_rhd - 1.) * pc.c / self.norm_code.v * pres * area * lorentz ** 2 * beta \
                * (1. + (lorentz - 1.) / lorentz * chi)
 
-    def eqn_eflx_rhd(self, lorentz=None, chi=None, rjet=None, pres=None, gamma_rhd=None):
+    def eqn_eflx_rhd(self, lorentz=None, chi=None, rjet=None, alpha=None, pres=None, gamma_rhd=None):
         """
         Jet energy flux as calculated from relativistic parameters
+        :param alpha:
         """
         if pres is None: pres = self.pres
         if lorentz is None: lorentz = self.lorentz
         if chi is None: chi = self.chi
         if rjet is None: rjet = self.rjet
         if gamma_rhd is None: gamma_rhd = self.gamma_rhd
-        area = rjet ** 2 * np.pi
-        power = self.eqn_power_rhd(lorentz, chi, rjet, pres, gamma_rhd)
+        area = self.eqn_area(rjet, alpha)
+        power = self.eqn_power_rhd(lorentz, chi, rjet, pres=pres, gamma_rhd=gamma_rhd)
         return power / area
 
     def eqn_mach(self, dens=None, pres=None, vel=None, gamma_rhd=None):
@@ -559,31 +565,33 @@ class JetParams():
         vsnd = self.eqn_vsnd(pres, dens, gamma_rhd)
         return vel / vsnd
 
-    def eqn_power_hd(self, vel=None, rjet=None, dens=None, pres=None, gamma_rhd=None):
+    def eqn_power_hd(self, vel=None, rjet=None, alpha=None, dens=None, pres=None, gamma_rhd=None):
         """
         Jet power as calculated from non-relativistic parameters
+        :param alpha:
         """
         if pres is None: pres = self.pres
         if dens is None: dens = self.dens
         if vel is None: vel = self.vel
         if rjet is None: rjet = self.rjet
         if gamma_rhd is None: gamma_rhd = self.gamma_rhd
-        area = rjet ** 2 * np.pi
+        area = self.eqn_area(rjet, alpha)
         mach = self.eqn_mach(dens, pres, vel, gamma_rhd)
         return gamma_rhd / (gamma_rhd - 1.) * pres * vel * area \
                * (1. + (gamma_rhd - 1.) / 2 * mach ** 2)
 
-    def eqn_eflx_hd(self, vel=None, rjet=None, dens=None, pres=None, gamma_rhd=None):
+    def eqn_eflx_hd(self, vel=None, rjet=None, alpha=None, dens=None, pres=None, gamma_rhd=None):
         """
         Jet energy flux as calculated from non-relativistic parameters
+        :param alpha:
         """
         if pres is None: pres = self.pres
         if dens is None: dens = self.dens
         if vel is None: vel = self.vel
         if rjet is None: rjet = self.rjet
         if gamma_rhd is None: gamma_rhd = self.gamma_rhd
-        area = rjet ** 2 * np.pi
-        power_hd = self.eqn_power_hd(vel, rjet, dens, pres, gamma_rhd)
+        area = self.eqn_area(rjet, alpha)
+        power_hd = self.eqn_power_hd(vel, rjet, dens=dens, pres=pres, gamma_rhd=gamma_rhd)
         return power_hd / area
 
     def eqn_pratio(self, power=None, lorentz=None, chi=None, rjet=None, gamma_rhd=None,
@@ -603,8 +611,8 @@ class JetParams():
         if input_param == 'pratio':
             return pratio
         elif input_param == 'chi':
-            pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd,
-                                 pratio, dens_ambient, temp_ambient, input_param)
+            pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd=gamma_rhd, pratio=pratio,
+                                 dens_ambient=dens_ambient, temp_ambient=temp_ambient, input_param=input_param)
             pres_ambient = self.eqn_pres_ambient(dens_ambient, temp_ambient)
             return pres / pres_ambient
         else:
@@ -642,8 +650,8 @@ class JetParams():
         if temp_ambient is None: temp_ambient = self.temp_ambient
         if pratio is None: pratio = self.pratio
         if input_param is None: input_param = self.input_param
-        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd, pratio,
-                             dens_ambient, temp_ambient, input_param)
+        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd=gamma_rhd, pratio=pratio, dens_ambient=dens_ambient,
+                             temp_ambient=temp_ambient, input_param=input_param)
         dens = self.eqn_dens(power, lorentz, chi, rjet, gamma_rhd, pratio,
                              dens_ambient, temp_ambient, input_param)
         return (pc.c / self.norm_code.v) ** 2 + gamma_rhd * pres / (dens * (gamma_rhd - 1.))
@@ -672,8 +680,8 @@ class JetParams():
         if temp_ambient is None: temp_ambient = self.temp_ambient
         if pratio is None: pratio = self.pratio
         if input_param is None: input_param = self.input_param
-        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd, pratio,
-                             dens_ambient, temp_ambient, input_param)
+        pres = self.eqn_pres(power, lorentz, chi, rjet, gamma_rhd=gamma_rhd, pratio=pratio, dens_ambient=dens_ambient,
+                             temp_ambient=temp_ambient, input_param=input_param)
         dens = self.eqn_dens(power, lorentz, chi, rjet, gamma_rhd, pratio,
                              dens_ambient, temp_ambient, input_param)
         return pres / (dens * (gamma_rhd - 1.))
@@ -723,16 +731,17 @@ class JetParams():
             pass
         return self.eqn_eflx(power, rjet) / (pc.c / self.norm_code.v)
 
-    def eqn_pdot_rhd(self, power=None, lorentz=None, chi=None, rjet=None, gamma_rhd=None):
+    def eqn_pdot_rhd(self, power=None, lorentz=None, chi=None, rjet=None, alpha=None, gamma_rhd=None):
         """
         Momentum injection rate
+        :param alpha:
         """
         if power is None: power = self.power
         if lorentz is None: lorentz = self.lorentz
         if chi is None: chi = self.chi
         if rjet is None: rjet = self.rjet
         if gamma_rhd is None: gamma_rhd = self.gamma_rhd
-        area = rjet ** 2 * np.pi
+        area = self.eqn_area(rjet, alpha)
         return self.eqn_pflx_rhd_frome(power, lorentz, chi, rjet, gamma_rhd) * area
 
     def eqn_pdot_rhd_frome(self, power=None):
@@ -750,14 +759,15 @@ class JetParams():
         if vel is None: vel = self.vel
         return dens * vel
 
-    def eqn_pdot_hd(self, dens=None, vel=None, rjet=None):
+    def eqn_pdot_hd(self, dens=None, vel=None, rjet=None, alpha=None):
         """
         Non-relativistic jet momentum injection rate
+        :param alpha:
         """
         if dens is None: dens = self.dens
         if vel is None: vel = self.vel
         if rjet is None: rjet = self.rjet
-        area = rjet ** 2 * np.pi
+        area = self.eqn_area(rjet, alpha)
         return self.eqn_pflx_hd(dens, vel) * area
 
     def eqn_vhead(self, power=None, lorentz=None, chi=None, rjet=None, gamma_rhd=None,
