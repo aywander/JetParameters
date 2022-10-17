@@ -5,13 +5,13 @@
 # given a variable are provided.
 # Requires python >= 2.7 because of OrderedDict
 
-from collections import OrderedDict
-
 import numpy as np
 import numpy.linalg as la
+import physconst as pc
+from collections import OrderedDict
 
 
-class PhysNorm():
+class PhysNorm:
     """
     Class that stores units (dimensions) and scaling factors for a selection of physical
     quantities which have dimensions are derivable from the set of five SI base quantities,
@@ -28,8 +28,8 @@ class PhysNorm():
         kwargs          Varname - scaling value pairs. Currently supported 
                         varnames are those in the keys of self.defs, namely:
                         x, m, t, curr, temp, v, dens, pres, pmom, pdot, pflx, 
-                        ener, epwr, eflx, eint, edot, cool, mdot, area, volume, 
-                        newton
+                        ener, epwr, eflx, eint, edot, cool, cooln, coolm,
+                        mdot, area, volume, newton
         """
 
         # Independent SI base dimensions
@@ -59,7 +59,9 @@ class PhysNorm():
             ('eflx', ((0, 1, -3, 0, 0), 'energy flux')),
             ('eint', ((2, 0, -2, 0, 0), 'specific (internal) energy, energy per unit mass')),
             ('edot', ((2, 0, -3, 0, 0), 'rate of change of specific internal energy density')),
-            ('cool', ((5, 1, -3, 0, 0), 'rate of change of internal energy per unit density squared')),
+            ('cool'   , ((-1,  1, -3,  0,  0), 'rate of change of internal energy density')),
+            ('coolm'  , (( 5, -1, -3,  0,  0), 'rate of change of internal energy density per unit mass density^2 ')),
+            ('cooln'  , (( 5,  1, -3,  0,  0), 'rate of change of internal energy density per unit number density^2')),
             ('mdot', ((0, 1, -1, 0, 0), 'mass outflow/accretion/loading/etc rate')),
             ('area', ((2, 0, 0, 0, 0), 'area')),
             ('volume', ((3, 0, 0, 0, 0), 'volume')),
@@ -68,26 +70,36 @@ class PhysNorm():
         ])
 
         # Test if all keys are known.
+        err = 0
         for k in kwargs:
             if k not in self.defs:
-                raise ValueError('Error, Unknown key ' + k + '.')
+                print('Error, Unknown key '+k+'.')
+                exit()
+        if err == 1:
+            exit()
 
         # Create ordered dictionary of kwargs
         kwargs_od = OrderedDict.fromkeys(self.defs)
-        for k, v in kwargs_od.items():
+        kwargs_od_iter = kwargs_od.copy()
+        for k, v in kwargs_od_iter.items():
             if k in kwargs:
                 kwargs_od[k] = kwargs[k]
             else:
                 kwargs_od.pop(k)
         self.kwargs = kwargs_od
-        dims = [self.defs[k][0] for k, v in kwargs_od.items() if v is not None]
+        dims = [self.defs[k][0] for k in kwargs_od]
 
         # Test if one of the dimension powers is zero.
         # If so, issue error message and exit
         cs = map(lambda l: np.sum(map(abs, l)), zip(*dims))
+        err = 0
         for i, s in enumerate(cs):
             if s == 0:
-                raise ValueError('This set of scalings is incomplete. No finite dimension for ' + self.dimdefs[i] + '.')
+                print('This set of scalings is incomplete. No finite dimension\
+                      for '+self.dimdefs[i]+'.')
+                err = 1
+        if err == 1:
+            exit()
 
         # Coefficient matrix
         cm = np.array(dims)
@@ -97,20 +109,21 @@ class PhysNorm():
         powers = OrderedDict.fromkeys(self.defs)
         for ip in powers:
             powers[ip] = la.solve(cm.T, np.array(self.defs[ip][0]))
-            scalings[ip] = np.prod(np.array(kwargs_od.values()) ** powers[ip])
+            scalings[ip] = np.prod(np.array(list(kwargs_od.values())) ** powers[ip])
         self.powers = powers
         self.scalings = scalings
 
         # Create attribute for this class of each variable
-        #self.__dict__.update(scalings)
-        for k, v in scalings.items(): setattr(self, k, v)
+        for k, v in list(scalings.items()):
+            setattr(self, k, v)
 
         return
 
     def print_scalings(self):
         """
-        Output a two column table of var name and scaling factor for all
+        Output a two column table of dvar name and scaling factor for all
         variables in this class.
         """
-        for k, v in self.scalings.items(): print(format(k, '16s') + format(v, '>16.8e'))
+        for k, v in list(self.scalings.items()):
+            print(format(k, '16s') + format(v, '>16.8e'))
 
