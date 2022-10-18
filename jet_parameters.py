@@ -68,7 +68,7 @@ class JetParameters:
         self.pratio = pratio
         self.lorentz = lorentz
         self.r_jet = r_jet
-        self.alpha= alpha
+        self.alpha = alpha
         self.gamma_rhd = gamma_rhd
         self.dens_ambient = dens_ambient
         self.temp_ambient = temp_ambient
@@ -157,8 +157,7 @@ class JetParameters:
         # Create an EOS object for ambient gas
         self.eosa = eos.EOSIdeal(comp=self.ic, inorm=norm_code, onorm=norm_code)
 
-
-        # Create update functions for all variables, and update all 
+        # Create update functions for all variables, and update all
         for var in self.defs:
             if var not in self.input_param_vars:
                 setattr(self, 'upd_' + var, self.create_upd_fn(var))
@@ -230,23 +229,27 @@ class JetParameters:
 
     def print_all_code(self):
 
+        print(f'{"variable":16s}   {"code units":>16s}')
         self.update_dictionary_code()
         for var, val in self.vars_code.items():
-            print(format(var, '16s') + format(val, '>16.8e'))
+            print(f'{var:16s}   {val:>16.8e}')
 
     def print_all_cgs(self):
 
+        print(f'{"variable":16s}   {"cgs units":>16s}')
         self.update_dictionary_cgs()
         for var, val in self.vars_cgs.items():
             print(format(var, '16s') + format(val, '>16.8e'))
+            print(f'{var:16s}   {val:>16.8e}')
 
     def print_all(self):
 
         self.update_all_dictionaries()
+        print(f'{"variable":16s}{"code units":>16s}   {"units":>16s}')
         for var, val_code, val_cgs in zip(self.vars_code.keys(),
                                           self.vars_code.values(),
                                           self.vars_cgs.values()):
-            print(format(var, '16s') + format(val_code, '>16.8e') + 3 * ' ' + format(val_cgs, '>16.8e'))
+            print(f'{var:16s}{val_code:>16.8e}   {val_cgs:>16.8e}')
 
     def create_upd_fn(self, var):
         eqn_fn = getattr(self, 'eqn_' + var)
