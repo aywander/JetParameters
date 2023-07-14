@@ -3,13 +3,13 @@ import physconst as pc
 import norm
 
 p = jp.JetParameters(
-    power=1.2e41,
+    power=1.0e42,
     chi=1.6,
     pratio=1.0,
-    lorentz=5.0,
+    lorentz=9.0,
     r_jet=0.3,
     alpha=30,
-    gamma_rhd=1.33333333333,
+    gamma_rhd=1.33333333,
     dens_ambient=0.1,
     temp_ambient=1.e7,
     gamma_hd=1.6666666666,
