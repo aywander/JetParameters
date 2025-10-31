@@ -3,7 +3,7 @@ from collections import deque
 from cycler import cycler
 
 
-def adjust_rcParams(style='seaborn', use_kpfonts=False, dark_mode=False, grid=True):
+def adjust_rcParams(style='seaborn-v0_8', use_kpfonts=False, dark_mode=False, grid=True):
 
     plt.style.use(style)
 
